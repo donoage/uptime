@@ -1,0 +1,38 @@
+name: uptime
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      # consecutive-failure counts, carried from the newest earlier run
+      - uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: state
+          key: uptime-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: uptime-state-
+      - name: Probe
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          UPTIME_STATE: state/state.json
+        run: python3 probe.py
+      - uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        if: always()
+        with:
+          path: state
+          key: uptime-state-${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,30 +1,8 @@
 [
-  {
-    "name": "BigTape",
-    "url": "https://bigtape.app"
-  },
-  {
-    "name": "Welo",
-    "url": "https://getwelo.app/robots.txt?uptime={ts}"
-  },
-  {
-    "name": "Given",
-    "url": "https://mygiven.app"
-  },
-  {
-    "name": "BigEarnings",
-    "url": "https://bigearnings.ai"
-  },
-  {
-    "name": "BigEarnings API",
-    "url": "https://api.bigearnings.ai"
-  },
-  {
-    "name": "PSAR",
-    "url": "https://psar.superbigcompany.com/login"
-  },
-  {
-    "name": "PROOF bad URL (temporary)",
-    "url": "https://uptime-proof.invalid/"
-  }
+  {"name": "BigTape", "url": "https://bigtape.app"},
+  {"name": "Welo", "url": "https://getwelo.app/robots.txt?uptime={ts}"},
+  {"name": "Given", "url": "https://mygiven.app"},
+  {"name": "BigEarnings", "url": "https://bigearnings.ai"},
+  {"name": "BigEarnings API", "url": "https://api.bigearnings.ai"},
+  {"name": "PSAR", "url": "https://psar.superbigcompany.com/login"}
 ]

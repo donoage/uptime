@@ -1,6 +1,7 @@
 name: uptime
 
 on:
+  # GitHub registers this schedule from the default branch's workflow file; a change here re-registers it
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:

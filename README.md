@@ -7,3 +7,7 @@ After 2 failures in a row it posts one alert to Discord, and it posts one note w
 Tests: `python3 -m unittest discover -s tests`
 
 A failed run (red X in Actions) means the probe itself is broken (bad targets file, cache step, unsent alert), not a site: the sites' state is in the run log and in #alert-bt. A heartbeat on runner-01 alerts #alert-bt when no run has succeeded for 30 min or the workflow is disabled.
+
+Nov 8 2026: no scheduled run fired in the first 35 min after the repo was created, though the workflow was active on
+main and Actions was enabled (0 runs with event=schedule). Committing a change to the workflow file makes GitHub
+register the schedule again. If the schedule stops firing, the heartbeat says so, and the same commit is the first fix.

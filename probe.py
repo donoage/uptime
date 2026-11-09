@@ -8,6 +8,10 @@ alert is sent when a target reaches THRESHOLD failures in a row, and one recover
 The Discord webhook comes from the DISCORD_WEBHOOK_URL environment variable and is never printed. If an alert is due
 and the webhook is missing or Discord refuses it, the run exits 1 so GitHub shows it failed, and the alert is retried
 on the next run.
+
+One process can probe several rounds (UPTIME_ROUNDS, default 1) UPTIME_INTERVAL_SEC apart (default 300): GitHub runs
+schedules late or not at all on a low-activity repo, so the workflow starts hourly and each run covers ~55 min of
+5-minute rounds. State is written after every round, so a cancelled run (a newer one took over) loses nothing.
 """
 
 from __future__ import annotations
@@ -79,7 +83,23 @@ def send(webhook: str, content: str, opener=urllib.request.urlopen) -> str:
         raise RuntimeError(f"Discord refused the alert ({type(exc).__name__} {getattr(exc, 'code', '')})") from None
 
 
-def main(argv: list[str] | None = None, opener=urllib.request.urlopen, environ=os.environ) -> int:
+def main(argv: list[str] | None = None, opener=urllib.request.urlopen, environ=os.environ, sleep=time.sleep,
+         clock=time.monotonic) -> int:
+    """Run UPTIME_ROUNDS rounds; exit 1 if any round could not send an alert that was due."""
+    rounds = max(1, int(environ.get("UPTIME_ROUNDS", "1")))
+    interval = float(environ.get("UPTIME_INTERVAL_SEC", "300"))
+    status = 0
+    for i in range(rounds):
+        started = clock()
+        if rounds > 1:
+            print(f"--- round {i + 1}/{rounds} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}", flush=True)
+        status = max(status, run_once(opener, environ))
+        if i + 1 < rounds:
+            sleep(max(0.0, interval - (clock() - started)))
+    return status
+
+
+def run_once(opener=urllib.request.urlopen, environ=os.environ) -> int:
     root = Path(__file__).resolve().parent
     state_path = Path(environ.get("UPTIME_STATE", root / "state" / "state.json"))
     try:
@@ -88,7 +108,7 @@ def main(argv: list[str] | None = None, opener=urllib.request.urlopen, environ=o
         state = {}
     results = {t["name"]: probe(t["url"], opener) for t in load_targets(root / "targets.json")}
     for name, (ok, detail) in results.items():
-        print(f"{'ok  ' if ok else 'FAIL'} {name}: {detail} (in a row: {0 if ok else state.get(name, 0) + 1})")
+        print(f"{'ok  ' if ok else 'FAIL'} {name}: {detail} (in a row: {0 if ok else state.get(name, 0) + 1})", flush=True)
     new, messages = step(state, results)
     webhook = environ.get("DISCORD_WEBHOOK_URL", "")
     status = 0

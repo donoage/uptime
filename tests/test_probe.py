@@ -104,12 +104,12 @@ class StepTest(unittest.TestCase):
 
 
 class MainTest(unittest.TestCase):
-    def run_main(self, codes, state, env_hook=HOOK):
+    def run_main(self, codes, state, env_hook=HOOK, extra_env=None, sleep=None):
         sent = []
         with tempfile.TemporaryDirectory() as d:
             sp = Path(d) / "state.json"
             sp.write_text(json.dumps(state))
-            env = {"UPTIME_STATE": str(sp)}
+            env = {"UPTIME_STATE": str(sp), **(extra_env or {})}
             if env_hook:
                 env["DISCORD_WEBHOOK_URL"] = env_hook
             out = io.StringIO()
@@ -117,7 +117,7 @@ class MainTest(unittest.TestCase):
             old = sys.stdout, sys.stderr
             sys.stdout, sys.stderr = out, err
             try:
-                rc = probe.main(opener=fake_opener(codes, sent), environ=env)
+                rc = probe.main(opener=fake_opener(codes, sent), environ=env, sleep=sleep or (lambda s: None))
             finally:
                 sys.stdout, sys.stderr = old
             return rc, json.loads(sp.read_text()), sent, out.getvalue() + err.getvalue()
@@ -154,10 +154,40 @@ class MainTest(unittest.TestCase):
         self.assertTrue(all(v == 0 for v in state.values()))
 
 
+    def test_rounds_loop_sleeps_the_remaining_interval_and_alerts_once(self):
+        # 3 rounds, site down throughout: fails at round 1 (count 1), alerts at round 2, stays silent at round 3
+        slept = []
+        rc, state, sent, out = self.run_main(
+            self.all_up(**{"https://bigtape.app": 502}), {},
+            extra_env={"UPTIME_ROUNDS": "3", "UPTIME_INTERVAL_SEC": "60"}, sleep=slept.append)
+        self.assertEqual((rc, state["BigTape"], len(sent)), (0, 3, 1))
+        self.assertEqual(len(slept), 2)  # no sleep after the last round
+        self.assertIn("round 3/3", out)
+
+    def test_round_sleep_subtracts_probe_time_and_never_goes_negative(self):
+        slept = []
+        ticks = iter([0, 7, 100, 190, 200])  # round starts/ends: probing took 7 s, then 90 s (longer than the interval)
+        with tempfile.TemporaryDirectory() as d:
+            env = {"UPTIME_STATE": str(Path(d) / "s.json"), "UPTIME_ROUNDS": "3", "UPTIME_INTERVAL_SEC": "60"}
+            old = sys.stdout
+            sys.stdout = io.StringIO()
+            try:
+                rc = probe.main(opener=fake_opener(self.all_up(), []), environ=env, sleep=slept.append,
+                                clock=lambda: next(ticks))
+            finally:
+                sys.stdout = old
+        self.assertEqual(rc, 0)
+        self.assertEqual(slept, [53.0, 0.0])
+
+
 class WorkflowTest(unittest.TestCase):
     def test_workflow_is_locked_down(self):
         wf = (Path(probe.__file__).parent / ".github" / "workflows" / "uptime.yml").read_text()
-        self.assertIn("cron: '*/5 * * * *'", wf)
+        self.assertIn("cron: '0 * * * *'", wf)
+        self.assertIn('UPTIME_ROUNDS: "11"', wf)
+        self.assertIn('UPTIME_INTERVAL_SEC: "300"', wf)
+        self.assertIn("timeout-minutes: 65", wf)
+        self.assertIn("cancel-in-progress: true", wf)
         self.assertIn("workflow_dispatch", wf)
         self.assertNotIn("pull_request", wf)
         self.assertIn("contents: read", wf)
